@@ -478,6 +478,10 @@
   "clearCanvasDialog": {
     "title": "Clear canvas"
   },
+  "deleteSelectionDialog": {
+    "title": "Delete selection",
+    "description": "This will delete multiple elements or a frame. Are you sure?"
+  },
   "publishDialog": {
     "title": "Publish library",
     "itemName": "Item name",

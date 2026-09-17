@@ -430,7 +430,10 @@ import ConvertElementTypePopup, {
   convertElementTypes,
 } from "./ConvertElementTypePopup";
 
-import { activeConfirmDialogAtom } from "./ActiveConfirmDialog";
+import {
+  activeConfirmDialogAtom,
+  type ActiveConfirmDialogType,
+} from "./ActiveConfirmDialog";
 import { AppArrowText } from "./App.arrowText";
 import { AppBucketFill } from "./App.bucketFill";
 import { AppCursor } from "./App.cursor";
@@ -1058,6 +1061,10 @@ class App extends React.Component<AppProps, AppState> {
     const result = editorJotaiStore.set(atom, ...args);
     this.triggerRender();
     return result;
+  };
+
+  setActiveConfirmDialog = (dialog: ActiveConfirmDialogType) => {
+    this.updateEditorAtom(activeConfirmDialogAtom, dialog);
   };
 
   private onWindowMessage(event: MessageEvent) {
@@ -5788,7 +5795,7 @@ class App extends React.Component<AppProps, AppState> {
         event[KEYS.CTRL_OR_CMD] &&
         (event.key === KEYS.BACKSPACE || event.key === KEYS.DELETE)
       ) {
-        this.updateEditorAtom(activeConfirmDialogAtom, "clearCanvas");
+        this.setActiveConfirmDialog("clearCanvas");
       }
 
       // eye dropper
