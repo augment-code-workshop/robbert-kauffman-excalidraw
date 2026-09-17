@@ -98,7 +98,7 @@ export type SocketUpdateDataSource = {
     payload: {
       socketId: SocketId;
       pointer: CollaboratorPointer;
-      button: "down" | "up" | "clear";
+      button: "down" | "up" | "cancel" | "clear";
       selectedElementIds: AppState["selectedElementIds"];
       username: string;
     };

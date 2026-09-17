@@ -73,7 +73,7 @@ export type SocketId = string & { _brand: "SocketId" };
 
 export type Collaborator = Readonly<{
   pointer?: CollaboratorPointer;
-  button?: "up" | "down";
+  button?: "up" | "down" | "cancel";
   selectedElementIds?: AppState["selectedElementIds"];
   username?: string | null;
   userState?: UserIdleState;
@@ -823,7 +823,7 @@ export interface ExcalidrawProps {
   isCollaborating?: boolean;
   onPointerUpdate?: (payload: {
     pointer: CollaboratorPointer;
-    button: "down" | "up";
+    button: "down" | "up" | "cancel";
     pointersMap: Gesture["pointers"];
   }) => void;
   /** Called when the user explicitly clears all ephemeral annotations. */

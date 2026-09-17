@@ -937,6 +937,8 @@ class Collab extends PureComponent<CollabProps, CollabState> {
     return this.excalidrawAPI.getSceneElementsIncludingDeleted();
   };
 
+  private annotationPointerDown = false;
+
   private throttledPointerUpdate = throttle(
     (payload: {
       pointer: SocketUpdateDataSource["MOUSE_LOCATION"]["payload"]["pointer"];
@@ -945,6 +947,7 @@ class Collab extends PureComponent<CollabProps, CollabState> {
         "clear"
       >;
       pointersMap: Gesture["pointers"];
+      volatile?: boolean;
     }) => this.portal.broadcastMouseLocation(payload),
     CURSOR_SYNC_TIMEOUT,
   );
@@ -961,13 +964,27 @@ class Collab extends PureComponent<CollabProps, CollabState> {
       return;
     }
 
-    if (payload.pointer.tool === "annotation" && payload.button === "up") {
-      this.throttledPointerUpdate.cancel();
-      this.portal.broadcastMouseLocation(payload);
+    if (payload.pointer.tool !== "annotation") {
+      this.annotationPointerDown = false;
+      this.throttledPointerUpdate(payload);
       return;
     }
 
-    this.throttledPointerUpdate(payload);
+    if (payload.button === "up" || payload.button === "cancel") {
+      this.annotationPointerDown = false;
+      this.throttledPointerUpdate.cancel();
+      this.portal.broadcastMouseLocation({ ...payload, volatile: false });
+      return;
+    }
+
+    if (!this.annotationPointerDown) {
+      this.annotationPointerDown = true;
+      this.throttledPointerUpdate.cancel();
+      this.portal.broadcastMouseLocation({ ...payload, volatile: false });
+      return;
+    }
+
+    this.throttledPointerUpdate({ ...payload, volatile: true });
   };
 
   relayVisibleSceneBounds = (props?: { force: boolean }) => {
@@ -986,6 +1003,7 @@ class Collab extends PureComponent<CollabProps, CollabState> {
   };
 
   onClearAnnotations = () => {
+    this.annotationPointerDown = false;
     this.throttledPointerUpdate.cancel();
     this.portal.broadcastAnnotationClear();
   };

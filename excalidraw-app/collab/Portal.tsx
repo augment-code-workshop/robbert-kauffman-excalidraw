@@ -88,8 +88,10 @@ class Portal {
     data: SocketUpdateData,
     volatile: boolean = false,
   ) {
-    this.annotationBroadcastQueue = this.annotationBroadcastQueue.then(() =>
-      this._broadcastSocketData(data, volatile),
+    const broadcast = () => this._broadcastSocketData(data, volatile);
+    this.annotationBroadcastQueue = this.annotationBroadcastQueue.then(
+      broadcast,
+      broadcast,
     );
     return this.annotationBroadcastQueue;
   }
@@ -217,6 +219,7 @@ class Portal {
       SocketUpdateDataSource["MOUSE_LOCATION"]["payload"]["button"],
       "clear"
     >;
+    volatile?: boolean;
   }) => {
     if (this.socket?.id) {
       const data: SocketUpdateDataSource["MOUSE_LOCATION"] = {
@@ -234,7 +237,7 @@ class Portal {
       if (payload.pointer.tool === "annotation") {
         return this.queueAnnotationBroadcast(
           data as SocketUpdateData,
-          payload.button === "down",
+          payload.volatile,
         );
       }
 

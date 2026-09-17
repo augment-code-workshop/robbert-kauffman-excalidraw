@@ -8,7 +8,7 @@ import { getLinkHandleFromCoords } from "../components/hyperlink/helpers";
 
 import { API } from "./helpers/api";
 import { Pointer } from "./helpers/ui";
-import { act, GlobalTestState, render, waitFor } from "./test-utils";
+import { act, fireEvent, GlobalTestState, render, waitFor } from "./test-utils";
 
 import type { Collaborator, ExcalidrawProps, SocketId } from "../types";
 
@@ -249,6 +249,56 @@ describe("persistent annotation tool", () => {
     await waitFor(() => expect(visibleOverlayPaths()).toHaveLength(0));
     expect(h.elements).toHaveLength(0);
     expect(API.getUndoStack()).toHaveLength(undoStackLength);
+  });
+
+  it("cancels local and remote in-progress strokes on pointer cancellation", async () => {
+    const onPointerUpdate = vi.fn();
+    await render(<Excalidraw onPointerUpdate={onPointerUpdate} />);
+
+    act(() => h.app.setActiveTool({ type: "annotation" }));
+    mouse.downAt(30, 30);
+    mouse.moveTo(60, 60);
+    fireEvent.pointerCancel(GlobalTestState.interactiveCanvas, {
+      clientX: 60,
+      clientY: 60,
+      pointerId: 1,
+      pointerType: "mouse",
+    });
+
+    await waitFor(() => expect(visibleOverlayPaths()).toHaveLength(0));
+    expect(onPointerUpdate).toHaveBeenLastCalledWith(
+      expect.objectContaining({ button: "cancel" }),
+    );
+
+    const socketId = "cancelled-annotation" as SocketId;
+    act(() =>
+      h.app.updateScene({
+        collaborators: new Map([
+          [
+            socketId,
+            {
+              pointer: { x: 10, y: 10, tool: "annotation" },
+              button: "down",
+            },
+          ],
+        ]),
+      }),
+    );
+    await waitFor(() => expect(visibleOverlayPaths()).toHaveLength(1));
+    act(() =>
+      h.app.updateScene({
+        collaborators: new Map([
+          [
+            socketId,
+            {
+              pointer: { x: 20, y: 20, tool: "annotation" },
+              button: "cancel",
+            },
+          ],
+        ]),
+      }),
+    );
+    await waitFor(() => expect(visibleOverlayPaths()).toHaveLength(0));
   });
 
   it("clears only the requesting collaborator's remote strokes", async () => {

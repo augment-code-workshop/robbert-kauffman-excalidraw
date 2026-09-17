@@ -54,6 +54,10 @@ export class LaserTrails implements Trail {
     this.localTrail.endPath();
   }
 
+  cancelPath(): void {
+    this.localTrail.cancelPath();
+  }
+
   start(container: SVGSVGElement) {
     this.container = container;
     this.localTrail.start(container);
@@ -108,6 +112,7 @@ export class LaserTrails implements Trail {
       if (collaborator.pointer && collaborator.pointer.tool === "laser") {
         const buttonDown = collaborator.button === "down";
         const buttonUp = collaborator.button === "up";
+        const buttonCancel = collaborator.button === "cancel";
         const hasTrail = trail.hasCurrentTrail;
 
         // Initialize a new trail
@@ -128,6 +133,10 @@ export class LaserTrails implements Trail {
         if (buttonUp && hasTrail) {
           trail.addPointToPath(collaborator.pointer.x, collaborator.pointer.y);
           trail.endPath();
+        }
+
+        if (buttonCancel) {
+          trail.cancelPath();
         }
       }
     }
@@ -167,6 +176,10 @@ export class AnnotationTrails implements Trail {
 
   endPath(): void {
     this.localTrail.endPath();
+  }
+
+  cancelPath(): void {
+    this.localTrail.cancelPath();
   }
 
   start(container: SVGSVGElement): void {
@@ -249,6 +262,7 @@ export class AnnotationTrails implements Trail {
       const { x, y } = collaborator.pointer;
       const buttonDown = collaborator.button === "down";
       const buttonUp = collaborator.button === "up";
+      const buttonCancel = collaborator.button === "cancel";
 
       if (buttonDown && !trail.hasCurrentTrail) {
         trail.startPath(x, y);
@@ -259,6 +273,9 @@ export class AnnotationTrails implements Trail {
       if (buttonUp && trail.hasCurrentTrail) {
         trail.addPointToPath(x, y);
         trail.endPath();
+      }
+      if (buttonCancel) {
+        trail.cancelPath();
       }
     }
   }

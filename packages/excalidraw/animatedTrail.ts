@@ -19,6 +19,7 @@ export interface Trail {
   startPath(x: number, y: number): void;
   addPointToPath(x: number, y: number): void;
   endPath(): void;
+  cancelPath(): void;
 }
 
 export interface AnimatedTrailOptions {
@@ -135,6 +136,13 @@ export class AnimatedTrail implements Trail {
       this.currentTrail.close();
       this.currentTrail.options.keepHead = false;
       this.pastTrails.push(this.currentTrail);
+      this.currentTrail = undefined;
+      this.update();
+    }
+  }
+
+  cancelPath() {
+    if (this.currentTrail) {
       this.currentTrail = undefined;
       this.update();
     }

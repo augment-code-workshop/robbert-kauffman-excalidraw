@@ -2660,7 +2660,7 @@ class App extends React.Component<AppProps, AppState> {
                             onClick={this.handleCanvasClick}
                             onPointerMove={this.handleCanvasPointerMove}
                             onPointerUp={this.handleCanvasPointerUp}
-                            onPointerCancel={this.removePointer}
+                            onPointerCancel={this.handleCanvasPointerCancel}
                             onTouchMove={this.handleTouchMove}
                             onPointerDown={this.handleCanvasPointerDown}
                             onDoubleClick={this.handleCanvasDoubleClick}
@@ -8857,6 +8857,12 @@ class App extends React.Component<AppProps, AppState> {
     }
   };
 
+  private handleCanvasPointerCancel = (
+    event: React.PointerEvent<HTMLCanvasElement>,
+  ) => {
+    this.maybeCleanupAfterMissingPointerUp(event.nativeEvent);
+  };
+
   private handleCanvasPointerUp = (
     event: React.PointerEvent<HTMLCanvasElement>,
   ) => {
@@ -11515,7 +11521,11 @@ class App extends React.Component<AppProps, AppState> {
       SnapCache.setReferenceSnapPoints(null);
       SnapCache.setVisibleGaps(null);
 
-      this.savePointer(childEvent.clientX, childEvent.clientY, "up");
+      this.savePointer(
+        childEvent.clientX,
+        childEvent.clientY,
+        childEvent.type === "pointercancel" ? "cancel" : "up",
+      );
 
       // if current elements are still selected
       // and the pointer is just over a locked element
@@ -12444,12 +12454,16 @@ class App extends React.Component<AppProps, AppState> {
       }
 
       if (activeTool.type === "laser") {
-        this.laserTrails.endPath();
+        childEvent.type === "pointercancel"
+          ? this.laserTrails.cancelPath()
+          : this.laserTrails.endPath();
         return;
       }
 
       if (activeTool.type === "annotation") {
-        this.annotationTrails.endPath();
+        childEvent.type === "pointercancel"
+          ? this.annotationTrails.cancelPath()
+          : this.annotationTrails.endPath();
         return;
       }
 
@@ -13847,7 +13861,11 @@ class App extends React.Component<AppProps, AppState> {
     }
   }
 
-  private savePointer = (x: number, y: number, button: "up" | "down") => {
+  private savePointer = (
+    x: number,
+    y: number,
+    button: "up" | "down" | "cancel",
+  ) => {
     // don't broadcast pointer updates (props.onPointerUpdate) when
     // non-interactive, unless the active tool stays user-driven via
     // `interaction.enabled.tools` — collaborators render e.g. a presenter's
@@ -13856,9 +13874,6 @@ class App extends React.Component<AppProps, AppState> {
       !this.isInteractionEnabled() &&
       !this.isToolSupported(this.state.activeTool.type)
     ) {
-      return;
-    }
-    if (!x || !y) {
       return;
     }
     const { x: sceneX, y: sceneY } = viewportCoordsToSceneCoords(
