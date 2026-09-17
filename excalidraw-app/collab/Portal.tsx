@@ -82,6 +82,20 @@ class Portal {
     );
   }
 
+  private annotationBroadcastQueue = Promise.resolve();
+
+  private queueAnnotationBroadcast(
+    data: SocketUpdateData,
+    volatile: boolean = false,
+  ) {
+    const broadcast = () => this._broadcastSocketData(data, volatile);
+    this.annotationBroadcastQueue = this.annotationBroadcastQueue.then(
+      broadcast,
+      broadcast,
+    );
+    return this.annotationBroadcastQueue;
+  }
+
   async _broadcastSocketData(
     data: SocketUpdateData,
     volatile: boolean = false,
@@ -201,7 +215,11 @@ class Portal {
 
   broadcastMouseLocation = (payload: {
     pointer: SocketUpdateDataSource["MOUSE_LOCATION"]["payload"]["pointer"];
-    button: SocketUpdateDataSource["MOUSE_LOCATION"]["payload"]["button"];
+    button: Exclude<
+      SocketUpdateDataSource["MOUSE_LOCATION"]["payload"]["button"],
+      "clear"
+    >;
+    volatile?: boolean;
   }) => {
     if (this.socket?.id) {
       const data: SocketUpdateDataSource["MOUSE_LOCATION"] = {
@@ -216,10 +234,41 @@ class Portal {
         },
       };
 
+      if (payload.pointer.tool === "annotation") {
+        return this.queueAnnotationBroadcast(
+          data as SocketUpdateData,
+          payload.volatile,
+        );
+      }
+
       return this._broadcastSocketData(
         data as SocketUpdateData,
         true, // volatile
       );
+    }
+  };
+
+  broadcastAnnotationClear = () => {
+    if (this.socket?.id) {
+      const data: SocketUpdateDataSource["MOUSE_LOCATION"] = {
+        type: WS_SUBTYPES.MOUSE_LOCATION,
+        payload: {
+          socketId: this.socket.id as SocketId,
+          pointer: {
+            x: 0,
+            y: 0,
+            tool: "annotation",
+            renderCursor: false,
+          },
+          button: "clear",
+          selectedElementIds:
+            this.collab.excalidrawAPI.getAppState().selectedElementIds,
+          username: this.collab.state.username,
+        },
+      };
+
+      // Clear-all must not be dropped or overtake queued annotation samples.
+      return this.queueAnnotationBroadcast(data as SocketUpdateData);
     }
   };
 

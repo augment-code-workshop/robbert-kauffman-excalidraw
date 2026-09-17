@@ -69,6 +69,107 @@ vi.mock("socket.io-client", () => {
  * i.e. multiplayer history tests could be a good first candidate, as we could test both history stacks simultaneously.
  */
 describe("collaboration", () => {
+  it("relays annotation clear-all as a reliable compatible pointer message", async () => {
+    await render(<ExcalidrawApp />);
+    await waitFor(() => {
+      expect(typeof h.app.props.onClearAnnotations).toBe("function");
+    });
+
+    const portal = window.collab.portal;
+    const previousSocket = portal.socket;
+    portal.socket = { id: "local-socket" } as typeof portal.socket;
+    const broadcastSpy = vi
+      .spyOn(portal, "_broadcastSocketData")
+      .mockResolvedValue(undefined);
+
+    try {
+      act(() => h.app.clearAnnotationsForAll());
+
+      await waitFor(() => {
+        expect(broadcastSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: "MOUSE_LOCATION",
+            payload: expect.objectContaining({
+              pointer: expect.objectContaining({ tool: "annotation" }),
+              button: "clear",
+            }),
+          }),
+          false,
+        );
+      });
+    } finally {
+      broadcastSpy.mockRestore();
+      portal.socket = previousSocket;
+    }
+  });
+
+  it("sends annotation stroke boundaries without throttling pointer-up", async () => {
+    await render(<ExcalidrawApp />);
+    const portal = window.collab.portal;
+    const previousSocket = portal.socket;
+    portal.socket = { id: "local-socket" } as typeof portal.socket;
+    const broadcastSpy = vi
+      .spyOn(portal, "broadcastMouseLocation")
+      .mockResolvedValue(undefined);
+    const pointersMap = new Map() as Parameters<
+      typeof window.collab.onPointerUpdate
+    >[0]["pointersMap"];
+
+    try {
+      window.collab.onPointerUpdate({
+        pointer: { x: 10, y: 10, tool: "annotation" },
+        button: "down",
+        pointersMap,
+      });
+      window.collab.onPointerUpdate({
+        pointer: { x: 20, y: 20, tool: "annotation" },
+        button: "down",
+        pointersMap,
+      });
+      window.collab.onPointerUpdate({
+        pointer: { x: 30, y: 30, tool: "annotation" },
+        button: "up",
+        pointersMap,
+      });
+
+      expect(broadcastSpy).toHaveBeenCalledTimes(3);
+      expect(broadcastSpy.mock.calls[0][0]).toEqual(
+        expect.objectContaining({ button: "down", volatile: false }),
+      );
+      expect(broadcastSpy.mock.calls[1][0]).toEqual(
+        expect.objectContaining({ button: "down", volatile: true }),
+      );
+      expect(broadcastSpy.mock.calls[2][0]).toEqual(
+        expect.objectContaining({ button: "up", volatile: false }),
+      );
+    } finally {
+      broadcastSpy.mockRestore();
+      portal.socket = previousSocket;
+    }
+  });
+
+  it("continues queued annotation broadcasts after a send fails", async () => {
+    await render(<ExcalidrawApp />);
+    const portal = window.collab.portal;
+    const previousSocket = portal.socket;
+    portal.socket = { id: "local-socket" } as typeof portal.socket;
+    const broadcastSpy = vi
+      .spyOn(portal, "_broadcastSocketData")
+      .mockRejectedValueOnce(new Error("encryption failed"))
+      .mockResolvedValue(undefined);
+
+    try {
+      await expect(portal.broadcastAnnotationClear()).rejects.toThrow(
+        "encryption failed",
+      );
+      await expect(portal.broadcastAnnotationClear()).resolves.toBeUndefined();
+      expect(broadcastSpy).toHaveBeenCalledTimes(2);
+    } finally {
+      broadcastSpy.mockRestore();
+      portal.socket = previousSocket;
+    }
+  });
+
   it("should emit two ephemeral increments even though updates get batched", async () => {
     const durableIncrements: DurableIncrement[] = [];
     const ephemeralIncrements: EphemeralIncrement[] = [];

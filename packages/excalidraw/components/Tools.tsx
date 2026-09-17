@@ -24,6 +24,7 @@ import {
   ImageIcon,
   EraserIcon,
   laserPointerToolIcon,
+  PenModeIcon,
   bucketFillIcon,
   LassoIcon,
   handIcon,
@@ -143,6 +144,9 @@ export const TOOLS = defineTools({
   laser: {
     icon: laserPointerToolIcon,
     letterKey: KEYS.K,
+  },
+  annotation: {
+    icon: PenModeIcon,
   },
   bucketfill: {
     icon: bucketFillIcon,

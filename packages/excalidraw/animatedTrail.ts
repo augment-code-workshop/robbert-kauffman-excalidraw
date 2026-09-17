@@ -19,12 +19,15 @@ export interface Trail {
   startPath(x: number, y: number): void;
   addPointToPath(x: number, y: number): void;
   endPath(): void;
+  cancelPath(): void;
 }
 
 export interface AnimatedTrailOptions {
   fill: (trail: AnimatedTrail) => string;
   stroke?: (trail: AnimatedTrail) => string;
   animateTrail?: boolean;
+  /** Redraw only when explicitly invalidated instead of on every frame. */
+  persistent?: boolean;
 }
 
 export class AnimatedTrail implements Trail {
@@ -95,11 +98,13 @@ export class AnimatedTrail implements Trail {
     if (!AnimationController.running(this.key)) {
       AnimationController.start(this.key, () => {
         const needsNext = this.onFrame();
-        if (needsNext) {
+        if (needsNext && !this.options.persistent) {
           return { keep: true };
         }
 
-        this.cleanup();
+        if (!needsNext) {
+          this.cleanup();
+        }
 
         return null;
       });
@@ -136,8 +141,25 @@ export class AnimatedTrail implements Trail {
     }
   }
 
+  cancelPath() {
+    if (this.currentTrail) {
+      this.currentTrail = undefined;
+      this.update();
+    }
+  }
+
   getCurrentTrail() {
     return this.currentTrail;
+  }
+
+  get hasTrails() {
+    return !!this.currentTrail || this.pastTrails.length > 0;
+  }
+
+  redraw() {
+    if (this.hasTrails) {
+      this.update();
+    }
   }
 
   clearTrails() {

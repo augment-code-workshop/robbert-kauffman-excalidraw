@@ -55,6 +55,10 @@ export class DrawShapeTrail implements Trail {
     this.trail.endPath();
   }
 
+  cancelPath(): void {
+    this.trail.cancelPath();
+  }
+
   clearTrails(): void {
     this.trail.clearTrails();
   }

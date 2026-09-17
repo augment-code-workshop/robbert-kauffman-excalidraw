@@ -883,6 +883,20 @@ describe("restoreAppState", () => {
     );
   });
 
+  it.each(["laser", "annotation"] as const)(
+    "does not restore the ephemeral %s tool",
+    (tool) => {
+      const stubImportedAppState = getDefaultAppState();
+      stubImportedAppState.activeTool.type = tool;
+
+      const restoredAppState = restore.restoreAppState(
+        stubImportedAppState,
+        null,
+      );
+      expect(restoredAppState.activeTool.type).toBe("selection");
+    },
+  );
+
   it("when imported data state has a not allowed Excalidraw Element Types", () => {
     const stubImportedAppState: any = getDefaultAppState();
 

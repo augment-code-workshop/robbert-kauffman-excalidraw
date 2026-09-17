@@ -117,6 +117,7 @@ export interface CollabAPI {
   /** function so that we can access the latest value from stale callbacks */
   isCollaborating: () => boolean;
   onPointerUpdate: CollabInstance["onPointerUpdate"];
+  onClearAnnotations: CollabInstance["onClearAnnotations"];
   startCollaboration: CollabInstance["startCollaboration"];
   stopCollaboration: CollabInstance["stopCollaboration"];
   syncElements: CollabInstance["syncElements"];
@@ -237,6 +238,7 @@ class Collab extends PureComponent<CollabProps, CollabState> {
     const collabAPI: CollabAPI = {
       isCollaborating: this.isCollaborating,
       onPointerUpdate: this.onPointerUpdate,
+      onClearAnnotations: this.onClearAnnotations,
       startCollaboration: this.startCollaboration,
       syncElements: this.syncElements,
       fetchImageFilesFromFirebase: this.fetchImageFilesFromFirebase,
@@ -620,11 +622,17 @@ class Collab extends PureComponent<CollabProps, CollabState> {
           case WS_SUBTYPES.MOUSE_LOCATION: {
             const { pointer, button, username, selectedElementIds } =
               decryptedData.payload;
-
             const socketId: SocketUpdateDataSource["MOUSE_LOCATION"]["payload"]["socketId"] =
               decryptedData.payload.socketId ||
               // @ts-ignore legacy, see #2094 (#2097)
               decryptedData.payload.socketID;
+
+            if (button === "clear") {
+              if (pointer.tool === "annotation") {
+                this.excalidrawAPI.clearRemoteAnnotations(socketId);
+              }
+              break;
+            }
 
             this.updateCollaborator(socketId, {
               pointer,
@@ -929,18 +937,55 @@ class Collab extends PureComponent<CollabProps, CollabState> {
     return this.excalidrawAPI.getSceneElementsIncludingDeleted();
   };
 
-  onPointerUpdate = throttle(
+  private annotationPointerDown = false;
+
+  private throttledPointerUpdate = throttle(
     (payload: {
       pointer: SocketUpdateDataSource["MOUSE_LOCATION"]["payload"]["pointer"];
-      button: SocketUpdateDataSource["MOUSE_LOCATION"]["payload"]["button"];
+      button: Exclude<
+        SocketUpdateDataSource["MOUSE_LOCATION"]["payload"]["button"],
+        "clear"
+      >;
       pointersMap: Gesture["pointers"];
-    }) => {
-      payload.pointersMap.size < 2 &&
-        this.portal.socket &&
-        this.portal.broadcastMouseLocation(payload);
-    },
+      volatile?: boolean;
+    }) => this.portal.broadcastMouseLocation(payload),
     CURSOR_SYNC_TIMEOUT,
   );
+
+  onPointerUpdate = (payload: {
+    pointer: SocketUpdateDataSource["MOUSE_LOCATION"]["payload"]["pointer"];
+    button: Exclude<
+      SocketUpdateDataSource["MOUSE_LOCATION"]["payload"]["button"],
+      "clear"
+    >;
+    pointersMap: Gesture["pointers"];
+  }) => {
+    if (payload.pointersMap.size >= 2 || !this.portal.socket) {
+      return;
+    }
+
+    if (payload.pointer.tool !== "annotation") {
+      this.annotationPointerDown = false;
+      this.throttledPointerUpdate(payload);
+      return;
+    }
+
+    if (payload.button === "up" || payload.button === "cancel") {
+      this.annotationPointerDown = false;
+      this.throttledPointerUpdate.cancel();
+      this.portal.broadcastMouseLocation({ ...payload, volatile: false });
+      return;
+    }
+
+    if (!this.annotationPointerDown) {
+      this.annotationPointerDown = true;
+      this.throttledPointerUpdate.cancel();
+      this.portal.broadcastMouseLocation({ ...payload, volatile: false });
+      return;
+    }
+
+    this.throttledPointerUpdate({ ...payload, volatile: true });
+  };
 
   relayVisibleSceneBounds = (props?: { force: boolean }) => {
     if (this.portal.socket && (this.followedBy.size > 0 || props?.force)) {
@@ -955,6 +1000,12 @@ class Collab extends PureComponent<CollabProps, CollabState> {
 
   onIdleStateChange = (userState: UserIdleState) => {
     this.portal.broadcastIdleChange(userState);
+  };
+
+  onClearAnnotations = () => {
+    this.annotationPointerDown = false;
+    this.throttledPointerUpdate.cancel();
+    this.portal.broadcastAnnotationClear();
   };
 
   broadcastElements = (elements: readonly OrderedExcalidrawElement[]) => {

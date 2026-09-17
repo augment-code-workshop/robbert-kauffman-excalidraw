@@ -953,6 +953,7 @@ const ExcalidrawWrapper = () => {
         initialData={initialStatePromiseRef.current.promise}
         isCollaborating={isCollaborating}
         onPointerUpdate={collabAPI?.onPointerUpdate}
+        onClearAnnotations={collabAPI?.onClearAnnotations}
         UIOptions={{
           canvasActions: {
             toggleTheme: true,

@@ -8,7 +8,7 @@ import { getLinkHandleFromCoords } from "../components/hyperlink/helpers";
 
 import { API } from "./helpers/api";
 import { Pointer } from "./helpers/ui";
-import { act, GlobalTestState, render, waitFor } from "./test-utils";
+import { act, fireEvent, GlobalTestState, render, waitFor } from "./test-utils";
 
 import type { Collaborator, ExcalidrawProps, SocketId } from "../types";
 
@@ -202,6 +202,168 @@ describe("laser tool interactions", () => {
     });
 
     expect(svgLayer.querySelectorAll("path")).toHaveLength(0);
+  });
+});
+
+describe("persistent annotation tool", () => {
+  const h = window.h;
+  const mouse = new Pointer("mouse");
+  const visibleOverlayPaths = () =>
+    Array.from(
+      document.querySelectorAll<SVGPathElement>(".SVGLayer svg path"),
+    ).filter((path) => path.getAttribute("d"));
+
+  it("keeps overlay-only strokes across tool and viewport changes until clear-all", async () => {
+    const onClearAnnotations = vi.fn();
+    await render(<Excalidraw onClearAnnotations={onClearAnnotations} />);
+    const undoStackLength = API.getUndoStack().length;
+
+    act(() => {
+      h.app.setActiveTool({ type: "annotation" });
+    });
+    expect(GlobalTestState.interactiveCanvas.style.cursor).toContain("url(");
+
+    mouse.downAt(30, 30);
+    mouse.moveTo(80, 80);
+    mouse.upAt(80, 80);
+
+    await waitFor(() => expect(visibleOverlayPaths()).toHaveLength(1));
+    expect(h.elements).toHaveLength(0);
+    expect(h.state.selectedElementIds).toEqual({});
+    expect(API.getUndoStack()).toHaveLength(undoStackLength);
+
+    act(() => {
+      h.app.setActiveTool({ type: "selection" });
+    });
+    const pathBeforePan = visibleOverlayPaths()[0].getAttribute("d");
+    API.setAppState({ scrollX: 25, scrollY: 40 });
+    await waitFor(() => {
+      expect(visibleOverlayPaths()).toHaveLength(1);
+      expect(visibleOverlayPaths()[0].getAttribute("d")).not.toBe(
+        pathBeforePan,
+      );
+    });
+
+    act(() => h.app.clearAnnotationsForAll());
+    expect(onClearAnnotations).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(visibleOverlayPaths()).toHaveLength(0));
+    expect(h.elements).toHaveLength(0);
+    expect(API.getUndoStack()).toHaveLength(undoStackLength);
+  });
+
+  it("cancels local and remote in-progress strokes on pointer cancellation", async () => {
+    const onPointerUpdate = vi.fn();
+    await render(<Excalidraw onPointerUpdate={onPointerUpdate} />);
+
+    act(() => h.app.setActiveTool({ type: "annotation" }));
+    mouse.downAt(30, 30);
+    mouse.moveTo(60, 60);
+    fireEvent.pointerCancel(GlobalTestState.interactiveCanvas, {
+      clientX: 60,
+      clientY: 60,
+      pointerId: 1,
+      pointerType: "mouse",
+    });
+
+    await waitFor(() => expect(visibleOverlayPaths()).toHaveLength(0));
+    expect(onPointerUpdate).toHaveBeenLastCalledWith(
+      expect.objectContaining({ button: "cancel" }),
+    );
+
+    const socketId = "cancelled-annotation" as SocketId;
+    act(() =>
+      h.app.updateScene({
+        collaborators: new Map([
+          [
+            socketId,
+            {
+              pointer: { x: 10, y: 10, tool: "annotation" },
+              button: "down",
+            },
+          ],
+        ]),
+      }),
+    );
+    await waitFor(() => expect(visibleOverlayPaths()).toHaveLength(1));
+    act(() =>
+      h.app.updateScene({
+        collaborators: new Map([
+          [
+            socketId,
+            {
+              pointer: { x: 20, y: 20, tool: "annotation" },
+              button: "cancel",
+            },
+          ],
+        ]),
+      }),
+    );
+    await waitFor(() => expect(visibleOverlayPaths()).toHaveLength(0));
+  });
+
+  it("clears only the requesting collaborator's remote strokes", async () => {
+    await render(<Excalidraw />);
+    const firstSocketId = "annotation-socket-1" as SocketId;
+    const secondSocketId = "annotation-socket-2" as SocketId;
+    const collaborators = new Map<SocketId, Collaborator>();
+
+    for (const [index, socketId] of [firstSocketId, secondSocketId].entries()) {
+      collaborators.set(socketId, {
+        pointer: { x: 10 + index * 20, y: 10, tool: "annotation" },
+        button: "down",
+      });
+      act(() => h.app.updateScene({ collaborators: new Map(collaborators) }));
+      collaborators.set(socketId, {
+        pointer: { x: 30 + index * 20, y: 30, tool: "annotation" },
+        button: "up",
+      });
+      act(() => h.app.updateScene({ collaborators: new Map(collaborators) }));
+    }
+
+    await waitFor(() => expect(visibleOverlayPaths()).toHaveLength(2));
+    act(() => h.app.api.clearRemoteAnnotations(firstSocketId));
+    await waitFor(() => expect(visibleOverlayPaths()).toHaveLength(1));
+  });
+
+  it("renders remote strokes and removes only ephemeral trails on departure", async () => {
+    await render(<Excalidraw />);
+    const socketId = "annotation-socket" as SocketId;
+    const collaborators = new Map<SocketId, Collaborator>([
+      [
+        socketId,
+        {
+          pointer: { x: 10, y: 10, tool: "annotation" },
+          button: "down",
+        },
+      ],
+    ]);
+
+    act(() => h.app.updateScene({ collaborators }));
+    collaborators.set(socketId, {
+      pointer: { x: 60, y: 60, tool: "annotation" },
+      button: "up",
+    });
+    act(() => h.app.updateScene({ collaborators: new Map(collaborators) }));
+    await waitFor(() => expect(visibleOverlayPaths()).toHaveLength(1));
+
+    act(() => h.app.clearAnnotations());
+    await waitFor(() => expect(visibleOverlayPaths()).toHaveLength(0));
+
+    collaborators.set(socketId, {
+      pointer: { x: 70, y: 70, tool: "annotation" },
+      button: "down",
+    });
+    act(() => h.app.updateScene({ collaborators: new Map(collaborators) }));
+    collaborators.set(socketId, {
+      pointer: { x: 100, y: 100, tool: "annotation" },
+      button: "up",
+    });
+    act(() => h.app.updateScene({ collaborators: new Map(collaborators) }));
+    await waitFor(() => expect(visibleOverlayPaths()).toHaveLength(1));
+
+    act(() => h.app.updateScene({ collaborators: new Map() }));
+    await waitFor(() => expect(visibleOverlayPaths()).toHaveLength(0));
+    expect(h.elements).toHaveLength(0);
   });
 });
 

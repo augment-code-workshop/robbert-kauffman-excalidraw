@@ -329,6 +329,7 @@ export const DEFAULT_UI_OPTIONS: AppProps["UIOptions"] = {
   },
   tools: {
     image: true,
+    annotation: true,
   },
 };
 
@@ -499,6 +500,7 @@ export const TOOL_TYPE = {
   magicframe: "magicframe",
   embeddable: "embeddable",
   laser: "laser",
+  annotation: "annotation",
   autoshape: "autoshape",
   bucketfill: "bucketfill",
 } as const;
