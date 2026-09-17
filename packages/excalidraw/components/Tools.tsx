@@ -238,6 +238,8 @@ export type ToolButtonComponentProps = {
 };
 
 type ToolButtonBehavior = {
+  /** Override the translated tooltip without changing the accessible label. */
+  tooltip?: string;
   /**
    * display the shortcut of another tool (tooltip, aria, keybinding badge) —
    * e.g. the lasso button shows the selection shortcut, which activates it
@@ -282,7 +284,9 @@ const createToolButton = (
         icon={config.icon}
         checked={activeTool.type === type}
         disabled={isToolButtonDisabled(app, type)}
-        title={shortcut ? `${label} — ${shortcut}` : label}
+        title={
+          behavior?.tooltip ?? (shortcut ? `${label} — ${shortcut}` : label)
+        }
         keyBindingLabel={
           hideKeyBinding || hideShortcut
             ? undefined
@@ -324,7 +328,9 @@ export const LineToolButton = createToolButton("line");
 export const FreedrawToolButton = createToolButton("freedraw");
 export const TextToolButton = createToolButton("text");
 export const ImageToolButton = createToolButton("image");
-export const EraserToolButton = createToolButton("eraser");
+export const EraserToolButton = createToolButton("eraser", {
+  tooltip: "ERASERRR",
+});
 export const FrameToolButton = createToolButton("frame");
 
 /**

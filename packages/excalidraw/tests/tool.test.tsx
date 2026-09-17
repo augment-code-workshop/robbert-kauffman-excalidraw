@@ -135,6 +135,7 @@ describe("Toolbar", () => {
     const eraser = toolbar.querySelector('[data-testid="toolbar-eraser"]');
 
     expect(selection?.nextElementSibling).toBe(eraser);
+    expect(eraser).toHaveAttribute("title", "ERASERRR");
   });
 });
 
