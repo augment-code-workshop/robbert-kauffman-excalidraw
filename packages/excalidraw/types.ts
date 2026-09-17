@@ -1140,6 +1140,7 @@ export type AppClassProperties = {
 
   onPointerUpEmitter: App["onPointerUpEmitter"];
   updateEditorAtom: App["updateEditorAtom"];
+  setActiveConfirmDialog: App["setActiveConfirmDialog"];
   onPointerDownEmitter: App["onPointerDownEmitter"];
   onEvent: App["onEvent"];
   onStateChange: App["onStateChange"];

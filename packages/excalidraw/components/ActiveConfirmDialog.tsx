@@ -1,11 +1,13 @@
-import { actionClearCanvas } from "../actions";
+import { actionClearCanvas, actionDeleteSelected } from "../actions";
 import { atom, useAtom } from "../editor-jotai";
 import { t } from "../i18n";
 
 import { useExcalidrawActionManager } from "./App";
 import ConfirmDialog from "./ConfirmDialog";
 
-export const activeConfirmDialogAtom = atom<"clearCanvas" | null>(null);
+export type ActiveConfirmDialogType = "clearCanvas" | "deleteSelection" | null;
+
+export const activeConfirmDialogAtom = atom<ActiveConfirmDialogType>(null);
 
 export const ActiveConfirmDialog = () => {
   const [activeConfirmDialog, setActiveConfirmDialog] = useAtom(
@@ -28,6 +30,23 @@ export const ActiveConfirmDialog = () => {
         title={t("clearCanvasDialog.title")}
       >
         <p className="clear-canvas__content"> {t("alerts.clearReset")}</p>
+      </ConfirmDialog>
+    );
+  }
+
+  if (activeConfirmDialog === "deleteSelection") {
+    return (
+      <ConfirmDialog
+        onConfirm={() => {
+          actionManager.executeAction(actionDeleteSelected, "ui", {
+            confirmed: true,
+          });
+          setActiveConfirmDialog(null);
+        }}
+        onCancel={() => setActiveConfirmDialog(null)}
+        title={t("deleteSelectionDialog.title")}
+      >
+        <p>{t("deleteSelectionDialog.description")}</p>
       </ConfirmDialog>
     );
   }

@@ -2,15 +2,56 @@ import React from "react";
 
 import { Excalidraw } from "../index";
 import { API } from "../tests/helpers/api";
-import { act, assertElements, render } from "../tests/test-utils";
+import {
+  act,
+  assertElements,
+  fireEvent,
+  render,
+  screen,
+} from "../tests/test-utils";
 
 import { actionDeleteSelected } from "./actionDeleteSelected";
 
 const { h } = window;
 
+const confirmDeletion = () => {
+  fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+};
+
 describe("deleting selected elements when frame selected should keep children + select them", () => {
   beforeEach(async () => {
     await render(<Excalidraw />);
+  });
+
+  it("deletes a single element without confirmation", () => {
+    const r1 = API.createElement({ type: "rectangle" });
+    API.setElements([r1]);
+    API.setSelectedElements([r1]);
+
+    act(() => {
+      h.app.actionManager.executeAction(actionDeleteSelected);
+    });
+
+    expect(screen.queryByText("Delete selection")).toBeNull();
+    assertElements(h.elements, [{ id: r1.id, isDeleted: true }]);
+  });
+
+  it("keeps a multi-element selection when deletion is canceled", () => {
+    const r1 = API.createElement({ type: "rectangle" });
+    const r2 = API.createElement({ type: "rectangle" });
+    API.setElements([r1, r2]);
+    API.setSelectedElements([r1, r2]);
+
+    act(() => {
+      h.app.actionManager.executeAction(actionDeleteSelected);
+    });
+
+    expect(screen.getByText("Delete selection")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    assertElements(h.elements, [
+      { id: r1.id, isDeleted: false, selected: true },
+      { id: r2.id, isDeleted: false, selected: true },
+    ]);
   });
 
   it("frame only", async () => {
@@ -30,6 +71,7 @@ describe("deleting selected elements when frame selected should keep children + 
     act(() => {
       h.app.actionManager.executeAction(actionDeleteSelected);
     });
+    confirmDeletion();
 
     assertElements(h.elements, [
       { id: f1.id, isDeleted: true },
@@ -67,6 +109,7 @@ describe("deleting selected elements when frame selected should keep children + 
     act(() => {
       h.app.actionManager.executeAction(actionDeleteSelected);
     });
+    confirmDeletion();
 
     assertElements(h.elements, [
       { id: f1.id, isDeleted: true },
@@ -105,6 +148,7 @@ describe("deleting selected elements when frame selected should keep children + 
     act(() => {
       h.app.actionManager.executeAction(actionDeleteSelected);
     });
+    confirmDeletion();
 
     assertElements(h.elements, [
       { id: f1.id, isDeleted: true },
@@ -143,6 +187,7 @@ describe("deleting selected elements when frame selected should keep children + 
     act(() => {
       h.app.actionManager.executeAction(actionDeleteSelected);
     });
+    confirmDeletion();
 
     assertElements(h.elements, [
       { id: f1.id, isDeleted: true },
@@ -181,6 +226,7 @@ describe("deleting selected elements when frame selected should keep children + 
     act(() => {
       h.app.actionManager.executeAction(actionDeleteSelected);
     });
+    confirmDeletion();
 
     assertElements(h.elements, [
       { id: f1.id, isDeleted: true },
@@ -204,6 +250,7 @@ describe("deleting selected elements when frame selected should keep children + 
     act(() => {
       h.app.actionManager.executeAction(actionDeleteSelected);
     });
+    confirmDeletion();
 
     assertElements(h.elements, [
       { id: f1.id, isDeleted: true },

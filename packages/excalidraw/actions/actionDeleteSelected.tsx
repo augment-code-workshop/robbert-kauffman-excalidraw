@@ -205,7 +205,11 @@ const handleGroupEditingState = (
   return appState;
 };
 
-export const actionDeleteSelected = register({
+type DeleteSelectedElementsData = {
+  confirmed?: boolean;
+};
+
+export const actionDeleteSelected = register<DeleteSelectedElementsData>({
   name: "deleteSelectedElements",
   label: "labels.delete",
   icon: TrashIcon,
@@ -270,6 +274,20 @@ export const actionDeleteSelected = register({
         },
         captureUpdate: CaptureUpdateAction.IMMEDIATELY,
       };
+    }
+
+    const selectedElements = getSelectedElements(
+      getNonDeletedElements(elements),
+      appState,
+    );
+
+    if (
+      !formData?.confirmed &&
+      (selectedElements.length >= 2 ||
+        selectedElements.some((element) => isFrameLikeElement(element)))
+    ) {
+      app.setActiveConfirmDialog("deleteSelection");
+      return false;
     }
 
     let { elements: nextElements, appState: nextAppState } =
