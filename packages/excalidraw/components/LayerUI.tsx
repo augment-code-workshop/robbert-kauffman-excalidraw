@@ -53,7 +53,7 @@ import { HelpDialog } from "./HelpDialog";
 import { ImageExportDialog } from "./ImageExportDialog";
 import { Island } from "./Island";
 import { JSONExportDialog } from "./JSONExportDialog";
-import { LaserPointerButton } from "./LaserPointerButton";
+import { AnnotationButton, LaserPointerButton } from "./LaserPointerButton";
 import { Toast } from "./Toast";
 import { Toolbar } from "./Toolbar";
 import {
@@ -374,16 +374,33 @@ const LayerUI = ({
                               height: "fit-content",
                             }}
                           >
-                            <LaserPointerButton
-                              title={t("toolBar.laser")}
-                              checked={
-                                appState.activeTool.type === TOOL_TYPE.laser
-                              }
-                              onChange={() =>
-                                app.setActiveTool({ type: TOOL_TYPE.laser })
-                              }
-                              isMobile
-                            />
+                            <Stack.Row gap={1}>
+                              <LaserPointerButton
+                                title={t("toolBar.laser")}
+                                checked={
+                                  appState.activeTool.type === TOOL_TYPE.laser
+                                }
+                                onChange={() =>
+                                  app.setActiveTool({ type: TOOL_TYPE.laser })
+                                }
+                                isMobile
+                              />
+                              {UIOptions.tools?.annotation !== false && (
+                                <AnnotationButton
+                                  title={t("toolBar.annotation")}
+                                  checked={
+                                    appState.activeTool.type ===
+                                    TOOL_TYPE.annotation
+                                  }
+                                  onChange={() =>
+                                    app.setActiveTool({
+                                      type: TOOL_TYPE.annotation,
+                                    })
+                                  }
+                                  isMobile
+                                />
+                              )}
+                            </Stack.Row>
                           </Island>
                         )}
                       </Stack.Row>

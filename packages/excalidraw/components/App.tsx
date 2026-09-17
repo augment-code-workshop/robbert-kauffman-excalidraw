@@ -413,7 +413,7 @@ import {
   getViewportForZoomWithScrollConstraints,
 } from "../viewport";
 import { ElementCanvasButtons } from "../components/ElementCanvasButtons";
-import { LaserTrails } from "../laserTrails";
+import { AnnotationTrails, LaserTrails } from "../laserTrails";
 import { withBatchedUpdates, withBatchedUpdatesThrottled } from "../reactUtils";
 import { isPointHittingTextAutoResizeHandle } from "../textAutoResizeHandle";
 import { textWysiwyg } from "../wysiwyg/textWysiwyg";
@@ -493,6 +493,7 @@ import type {
   ExcalidrawImperativeAPIEventMap,
   GenerateDiagramToCode,
   NullableGridSize,
+  SocketId,
   UIConfig,
 } from "../types";
 import type { RoughCanvas } from "roughjs/bin/canvas";
@@ -714,6 +715,7 @@ class App extends React.Component<AppProps, AppState> {
 
   drawShape = new AppDrawShape(this);
   laserTrails = new LaserTrails(this);
+  annotationTrails = new AnnotationTrails(this);
   eraserTrail = new EraserTrail(this);
   lassoTrail = new LassoTrail(this);
   cursorHints = new CursorHints(this);
@@ -762,6 +764,9 @@ class App extends React.Component<AppProps, AppState> {
       updateLibrary: this.library.updateLibrary,
       addFiles: this.addFiles,
       resetScene: this.resetScene,
+      clearAnnotations: () => this.clearAnnotations(),
+      clearRemoteAnnotations: (socketId) =>
+        this.clearRemoteAnnotations(socketId),
       getSceneElementsIncludingDeleted: this.getSceneElementsIncludingDeleted,
       getSceneElementsMapIncludingDeleted:
         this.getSceneElementsMapIncludingDeleted,
@@ -996,6 +1001,9 @@ class App extends React.Component<AppProps, AppState> {
     if (tool === "laser") {
       return tools?.laser === true;
     }
+    if (tool === "annotation") {
+      return tools?.annotation === true;
+    }
     if (tool === "custom") {
       return tools?.custom === true;
     }
@@ -1015,7 +1023,7 @@ class App extends React.Component<AppProps, AppState> {
 
   /**
    * Whether the active tool captures the primary pointer instead of the
-   * view-mode drag-to-pan — the laser and host-implemented custom tools do;
+   * view-mode drag-to-pan — presentation and host-implemented custom tools do;
    * while non-interactive, any tool allowed via
    * `interaction.enabled.tools` does. (Editing tools capture the pointer
    * trivially since view mode implies they're not active; this predicate only
@@ -1024,11 +1032,12 @@ class App extends React.Component<AppProps, AppState> {
   public isActiveToolPointerCapturing(): boolean {
     if (!this.isInteractionEnabled()) {
       // an active tool that isn't allowed via `interaction.enabled.tools`
-      // is inert — including the laser
+      // is inert — including presentation tools
       return this.isToolSupported(this.state.activeTool.type);
     }
     return (
       this.state.activeTool.type === "laser" ||
+      this.state.activeTool.type === "annotation" ||
       this.state.activeTool.type === "custom"
     );
   }
@@ -2327,7 +2336,8 @@ class App extends React.Component<AppProps, AppState> {
           this.state.newElement ||
           this.state.selectedElementsAreBeingDragged ||
           this.state.resizingElement ||
-          (this.state.activeTool.type === "laser" &&
+          ((this.state.activeTool.type === "laser" ||
+            this.state.activeTool.type === "annotation") &&
             // technically we can just test on this once we make it more safe
             this.state.cursorButton === "down");
 
@@ -2459,6 +2469,7 @@ class App extends React.Component<AppProps, AppState> {
                           <SVGLayer
                             trails={[
                               this.laserTrails,
+                              this.annotationTrails,
                               this.lassoTrail,
                               this.eraserTrail,
                               this.drawShape.trail,
@@ -3327,9 +3338,10 @@ class App extends React.Component<AppProps, AppState> {
       this.isToolSupported(this.state.activeTool.type)
     ) {
       if (!this.isToolSupported(this.state.activeTool.type)) {
-        // end a possibly mid-stroke laser trail (the stroke's own window
-        // listeners tear down on the next pointerup)
+        // End a possibly mid-stroke presentation trail (the stroke's own
+        // window listeners tear down on the next pointerup).
         this.laserTrails.endPath();
+        this.annotationTrails.endPath();
       }
       this.cursor.reset();
     }
@@ -3808,6 +3820,7 @@ class App extends React.Component<AppProps, AppState> {
     this.removeEventListeners();
     this.library.destroy();
     this.laserTrails.stop();
+    this.annotationTrails.stop();
     this.drawShape.stop();
     this.eraserTrail.stop();
     this.onChangeEmitter.clear();
@@ -4119,6 +4132,7 @@ class App extends React.Component<AppProps, AppState> {
       prevState.scrollX !== this.state.scrollX ||
       prevState.scrollY !== this.state.scrollY
     ) {
+      this.annotationTrails.redraw();
       this.props?.onScrollChange?.(
         this.state.scrollX,
         this.state.scrollY,
@@ -5110,6 +5124,27 @@ class App extends React.Component<AppProps, AppState> {
     this.setState({ toast });
   };
 
+  /** Clears overlay annotations without touching scene state or history. */
+  clearAnnotations = () => {
+    this.annotationTrails.clearTrails();
+    this.forceUpdate();
+  };
+
+  /** Clears annotations created by one remote collaborator only. */
+  clearRemoteAnnotations = (socketId: SocketId) => {
+    this.annotationTrails.clearCollabTrail(socketId);
+    this.forceUpdate();
+  };
+
+  hasAnnotations = () => this.annotationTrails.hasLocalTrails;
+
+  /** User-facing clear operation; hosts can relay it to collaborators. */
+  clearAnnotationsForAll = () => {
+    this.annotationTrails.clearLocalTrail();
+    this.forceUpdate();
+    this.props.onClearAnnotations?.();
+  };
+
   restoreFileFromShare = async () => {
     try {
       const webShareTargetCache = await caches.open("web-share-target");
@@ -5227,6 +5262,7 @@ class App extends React.Component<AppProps, AppState> {
 
       if (collaborators) {
         this.laserTrails.updateCollabTrails(collaborators);
+        this.annotationTrails.updateCollabTrails(collaborators);
         this.setState({ collaborators });
       }
     },
@@ -5815,7 +5851,8 @@ class App extends React.Component<AppProps, AppState> {
     if (event.key === KEYS.SPACE) {
       if (
         (this.state.viewModeEnabled &&
-          this.state.activeTool.type !== "laser") ||
+          this.state.activeTool.type !== "laser" &&
+          this.state.activeTool.type !== "annotation") ||
         this.state.openDialog?.name === "elementLinkSelector"
       ) {
         this.cursor.set(CURSOR_TYPE.GRAB);
@@ -6006,6 +6043,14 @@ class App extends React.Component<AppProps, AppState> {
             lastActiveTool: this.state.activeTool,
           })
         : updateActiveTool(this.state, tool);
+
+    if (
+      this.state.activeTool.type === "annotation" &&
+      nextActiveTool.type !== "annotation"
+    ) {
+      this.annotationTrails.endPath();
+    }
+
     if (nextActiveTool.type === "hand") {
       this.cursor.set(CURSOR_TYPE.GRAB);
     } else if (!isHoldingSpace) {
@@ -7906,12 +7951,13 @@ class App extends React.Component<AppProps, AppState> {
     }
 
     const isPressingAnyButton = Boolean(event.buttons);
-    const isLaserTool = this.state.activeTool.type === "laser";
+    const isPresentationTool =
+      this.state.activeTool.type === "laser" ||
+      this.state.activeTool.type === "annotation";
     if (
       isPressingAnyButton ||
-      // checking against laser so that if you mouseover with a laser tool
-      // over a link/embeddable, we change the cursor
-      (!isLaserTool &&
+      // Presentation tools still expose link/embeddable hover affordances.
+      (!isPresentationTool &&
         this.state.activeTool.type !== "selection" &&
         this.state.activeTool.type !== "lasso" &&
         this.state.activeTool.type !== "text" &&
@@ -8038,7 +8084,7 @@ class App extends React.Component<AppProps, AppState> {
     }
 
     if (!this.applyElementLinkHoverAffordance()) {
-      if (isLaserTool) {
+      if (isPresentationTool) {
         return;
       }
       if (
@@ -8321,7 +8367,7 @@ class App extends React.Component<AppProps, AppState> {
     // with the active tool allowed via `interaction.enabled.tools`, the
     // pointer keeps driving it through the full flow below — safe while
     // non-interactive because that implies view mode, whose gates constrain
-    // everything except the tool-usage path (laser & custom tools)
+    // everything except the tool-usage path (presentation & custom tools)
 
     const selectedElements = this.scene.getSelectedElements(this.state);
 
@@ -8348,9 +8394,12 @@ class App extends React.Component<AppProps, AppState> {
     }
 
     this.maybeCleanupAfterMissingPointerUp(event.nativeEvent);
-    // laser pointer is a presentation aid, not an edit — using it while
-    // following someone shouldn't break follow
-    if (this.state.activeTool.type !== "laser") {
+    // Presentation aids are not edits — using them while following someone
+    // should not break follow.
+    if (
+      this.state.activeTool.type !== "laser" &&
+      this.state.activeTool.type !== "annotation"
+    ) {
       this.requestUnfollow();
     }
 
@@ -8737,6 +8786,11 @@ class App extends React.Component<AppProps, AppState> {
       );
     } else if (this.state.activeTool.type === "laser") {
       this.laserTrails.startPath(
+        pointerDownState.lastCoords.x,
+        pointerDownState.lastCoords.y,
+      );
+    } else if (this.state.activeTool.type === "annotation") {
+      this.annotationTrails.startPath(
         pointerDownState.lastCoords.x,
         pointerDownState.lastCoords.y,
       );
@@ -10575,6 +10629,8 @@ class App extends React.Component<AppProps, AppState> {
 
       if (this.state.activeTool.type === "laser") {
         this.laserTrails.addPointToPath(pointerCoords.x, pointerCoords.y);
+      } else if (this.state.activeTool.type === "annotation") {
+        this.annotationTrails.addPointToPath(pointerCoords.x, pointerCoords.y);
       }
 
       if (this.drawShape.handlePointerMove(pointerCoords)) {
@@ -12357,6 +12413,7 @@ class App extends React.Component<AppProps, AppState> {
 
       if (
         !this.isEditingTextContent() &&
+        activeTool.type !== "annotation" &&
         (activeTool.type !== "selection" ||
           isSomeElementSelected(
             this.scene.getNonDeletedElements(),
@@ -12388,6 +12445,11 @@ class App extends React.Component<AppProps, AppState> {
 
       if (activeTool.type === "laser") {
         this.laserTrails.endPath();
+        return;
+      }
+
+      if (activeTool.type === "annotation") {
+        this.annotationTrails.endPath();
         return;
       }
 
@@ -13811,7 +13873,12 @@ class App extends React.Component<AppProps, AppState> {
     const pointer: CollaboratorPointer = {
       x: sceneX,
       y: sceneY,
-      tool: this.state.activeTool.type === "laser" ? "laser" : "pointer",
+      tool:
+        this.state.activeTool.type === "laser"
+          ? "laser"
+          : this.state.activeTool.type === "annotation"
+          ? "annotation"
+          : "pointer",
     };
 
     this.props.onPointerUpdate?.({

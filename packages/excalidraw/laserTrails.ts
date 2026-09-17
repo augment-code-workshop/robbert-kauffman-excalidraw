@@ -133,3 +133,133 @@ export class LaserTrails implements Trail {
     }
   }
 }
+
+/**
+ * Non-decaying, ephemeral annotation strokes. Like laser trails these live in
+ * the SVG overlay only, but completed paths are retained until `clearTrails`.
+ */
+export class AnnotationTrails implements Trail {
+  public localTrail: AnimatedTrail;
+  private collabTrails = new Map<SocketId, AnimatedTrail>();
+  private container?: SVGSVGElement;
+
+  constructor(private app: App) {
+    this.localTrail = this.createTrail(() => DEFAULT_LASER_COLOR);
+  }
+
+  private createTrail(fill: () => string) {
+    return new AnimatedTrail(this.app, {
+      simplify: 0,
+      streamline: 0.4,
+      sizeMapping: () => 1,
+      persistent: true,
+      fill,
+    });
+  }
+
+  startPath(x: number, y: number): void {
+    this.localTrail.startPath(x, y);
+  }
+
+  addPointToPath(x: number, y: number): void {
+    this.localTrail.addPointToPath(x, y);
+  }
+
+  endPath(): void {
+    this.localTrail.endPath();
+  }
+
+  start(container: SVGSVGElement): void {
+    this.container = container;
+    this.localTrail.start(container);
+  }
+
+  stop(): void {
+    this.localTrail.stop();
+    this.stopCollabTrails();
+    this.container = undefined;
+  }
+
+  clearLocalTrail(): void {
+    this.localTrail.clearTrails();
+  }
+
+  clearTrails(): void {
+    this.clearLocalTrail();
+    for (const trail of this.collabTrails.values()) {
+      trail.clearTrails();
+    }
+  }
+
+  clearCollabTrail(socketId: SocketId): void {
+    this.collabTrails.get(socketId)?.clearTrails();
+  }
+
+  redraw(): void {
+    this.localTrail.redraw();
+    for (const trail of this.collabTrails.values()) {
+      trail.redraw();
+    }
+  }
+
+  get hasLocalTrails(): boolean {
+    return this.localTrail.hasTrails;
+  }
+
+  private stopCollabTrails(collaborators?: App["state"]["collaborators"]) {
+    for (const [socketId, trail] of this.collabTrails) {
+      if (!collaborators?.has(socketId)) {
+        trail.stop();
+        this.collabTrails.delete(socketId);
+      }
+    }
+  }
+
+  updateCollabTrails(collaborators: App["state"]["collaborators"]): void {
+    this.stopCollabTrails(collaborators);
+
+    if (!this.container) {
+      return;
+    }
+
+    for (const [socketId, collaborator] of collaborators) {
+      if (collaborator.isCurrentUser) {
+        continue;
+      }
+
+      const currentTrail = this.collabTrails.get(socketId);
+      if (!collaborator.pointer || collaborator.pointer.tool !== "annotation") {
+        if (currentTrail?.hasCurrentTrail) {
+          currentTrail.endPath();
+        }
+        continue;
+      }
+
+      let trail = currentTrail;
+      if (!trail) {
+        trail = this.createTrail(
+          () =>
+            collaborator.pointer?.laserColor ||
+            getClientColor(socketId, collaborator),
+        );
+        trail.start(this.container);
+        this.collabTrails.set(socketId, trail);
+      }
+
+      const { x, y } = collaborator.pointer;
+      const buttonDown = collaborator.button === "down";
+      const buttonUp = collaborator.button === "up";
+
+      if (buttonDown && !trail.hasCurrentTrail) {
+        trail.startPath(x, y);
+      }
+      if (buttonDown && !trail.hasLastPoint(x, y)) {
+        trail.addPointToPath(x, y);
+      }
+      if (buttonUp && trail.hasCurrentTrail) {
+        trail.addPointToPath(x, y);
+        trail.endPath();
+      }
+    }
+  }
+}

@@ -79,6 +79,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
     onInitialize,
     isCollaborating = false,
     onPointerUpdate,
+    onClearAnnotations,
     renderTopLeftUI,
     renderTopRightUI,
     langCode = defaultLang.code,
@@ -129,6 +130,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
     },
     tools: {
       image: props.UIOptions?.tools?.image ?? true,
+      annotation: props.UIOptions?.tools?.annotation ?? true,
     },
   };
 
@@ -220,6 +222,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
           onInitialize={onInitialize}
           isCollaborating={isCollaborating}
           onPointerUpdate={onPointerUpdate}
+          onClearAnnotations={onClearAnnotations}
           renderTopLeftUI={renderTopLeftUI}
           renderTopRightUI={renderTopRightUI}
           langCode={langCode}
@@ -320,6 +323,8 @@ const areEqual = (prevProps: ExcalidrawProps, nextProps: ExcalidrawProps) => {
         !!nextInteraction.enabled?.browserZoom &&
       !!prevInteraction.enabled?.tools?.laser ===
         !!nextInteraction.enabled?.tools?.laser &&
+      !!prevInteraction.enabled?.tools?.annotation ===
+        !!nextInteraction.enabled?.tools?.annotation &&
       !!prevInteraction.enabled?.tools?.custom ===
         !!nextInteraction.enabled?.tools?.custom);
 

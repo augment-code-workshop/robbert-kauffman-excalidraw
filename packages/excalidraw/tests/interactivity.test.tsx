@@ -1435,6 +1435,29 @@ describe("interaction={{ enabled: { tools } }}", () => {
     expect(onPointerUpdateSpy.mock.calls.at(-1)![0].button).toBe("up");
   });
 
+  it("annotation: remains an overlay and broadcasts its distinct tool", async () => {
+    await renderWithInteraction({ enabled: { tools: { annotation: true } } });
+
+    act(() => {
+      h.app.setActiveTool({ type: "annotation" });
+    });
+    expect(h.app.isToolSupported("annotation")).toBe(true);
+    const { scrollX, scrollY } = h.state;
+
+    mouse.downAt(30, 30);
+    mouse.moveTo(80, 80);
+    mouse.upAt(80, 80);
+
+    expect(h.app.annotationTrails.localTrail.hasCurrentTrail).toBe(false);
+    expect(h.elements).toHaveLength(1);
+    expect(h.state.selectedElementIds).toEqual({});
+    expect([h.state.scrollX, h.state.scrollY]).toEqual([scrollX, scrollY]);
+    expect(onPointerUpdateSpy.mock.calls.at(-1)![0]).toMatchObject({
+      pointer: { tool: "annotation" },
+      button: "up",
+    });
+  });
+
   it("custom: onPointerDown/onPointerUp keep dispatching when enabled", async () => {
     await renderWithInteraction({ enabled: { tools: { custom: true } } });
 

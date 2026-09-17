@@ -96,7 +96,7 @@ export type Collaborator = Readonly<{
 export type CollaboratorPointer = {
   x: number;
   y: number;
-  tool: "pointer" | "laser";
+  tool: "pointer" | "laser" | "annotation";
   /**
    * Whether to render cursor + username. Useful when you only want to render
    * laser trail.
@@ -161,6 +161,7 @@ export type ToolType =
   | "magicframe"
   | "embeddable"
   | "laser"
+  | "annotation"
   | "autoshape"
   | "bucketfill";
 
@@ -745,6 +746,13 @@ export type InteractionConfig = {
        */
       laser?: boolean;
       /**
+       * Persistent annotation strokes stay usable and continue broadcasting
+       * through `onPointerUpdate` without becoming scene elements.
+       *
+       * @default false
+       */
+      annotation?: boolean;
+      /**
        * Custom tools (`activeTool.type === "custom"`) stay usable — the
        * editor keeps dispatching `onPointerDown` / `onPointerUp` for them.
        * Tool behavior is host-implemented; activate custom tools with
@@ -814,10 +822,12 @@ export interface ExcalidrawProps {
   onInitialize?: (api: ExcalidrawImperativeAPI) => void;
   isCollaborating?: boolean;
   onPointerUpdate?: (payload: {
-    pointer: { x: number; y: number; tool: "pointer" | "laser" };
+    pointer: CollaboratorPointer;
     button: "down" | "up";
     pointersMap: Gesture["pointers"];
   }) => void;
+  /** Called when the user explicitly clears all ephemeral annotations. */
+  onClearAnnotations?: () => void;
   onPaste?: (
     data: ClipboardData,
     event: ClipboardEvent | null,
@@ -1057,6 +1067,7 @@ export type UIOptions = Partial<{
   canvasActions: CanvasActions;
   tools: {
     image: boolean;
+    annotation: boolean;
   };
   /**
    * Optionally control the editor form factor and desktop UI mode from the host app.
@@ -1122,6 +1133,8 @@ export type AppClassProperties = {
   togglePenMode: App["togglePenMode"];
   toggleLock: App["toggleLock"];
   setActiveTool: App["setActiveTool"];
+  clearAnnotationsForAll: App["clearAnnotationsForAll"];
+  hasAnnotations: App["hasAnnotations"];
   setOpenDialog: App["setOpenDialog"];
   insertEmbeddableElement: App["insertEmbeddableElement"];
   onMagicframeToolSelect: App["onMagicframeToolSelect"];
@@ -1255,6 +1268,10 @@ export interface ExcalidrawImperativeAPI {
   mutateElement: InstanceType<typeof App>["mutateElement"];
   updateLibrary: InstanceType<typeof Library>["updateLibrary"];
   resetScene: InstanceType<typeof App>["resetScene"];
+  /** Clears all local and remote ephemeral annotation overlays. */
+  clearAnnotations: InstanceType<typeof App>["clearAnnotations"];
+  /** Clears annotation overlays created by one remote collaborator. */
+  clearRemoteAnnotations: InstanceType<typeof App>["clearRemoteAnnotations"];
   getSceneElementsIncludingDeleted: InstanceType<
     typeof App
   >["getSceneElementsIncludingDeleted"];

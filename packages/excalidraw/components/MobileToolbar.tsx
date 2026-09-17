@@ -29,6 +29,8 @@ import {
   frameToolIcon,
   EmbedIcon,
   laserPointerToolIcon,
+  PenModeIcon,
+  TrashIcon,
   drawShapeToolIcon,
   bucketFillIcon,
   mermaidLogoIcon,
@@ -76,6 +78,7 @@ export const MobileToolbar = ({ app, setAppState }: MobileToolbarProps) => {
   const frameToolSelected = activeTool.type === "frame";
   const drawShapeToolSelected = activeTool.type === "autoshape";
   const laserToolSelected = activeTool.type === "laser";
+  const annotationToolSelected = activeTool.type === "annotation";
   const embeddableToolSelected = activeTool.type === "embeddable";
   const bucketFillToolSelected = activeTool.type === "bucketfill";
 
@@ -117,10 +120,17 @@ export const MobileToolbar = ({ app, setAppState }: MobileToolbarProps) => {
       "frame",
       "embeddable",
       "laser",
+      "annotation",
       "bucketfill",
       "magicframe",
     ] as const
   ).filter((tool) => {
+    if (
+      tool === "annotation" &&
+      app.props.UIOptions.tools?.annotation === false
+    ) {
+      return false;
+    }
     if (showTextToolOutside && tool === "text") {
       return false;
     }
@@ -141,6 +151,8 @@ export const MobileToolbar = ({ app, setAppState }: MobileToolbarProps) => {
       ? EmbedIcon
       : activeTool.type === "laser"
       ? laserPointerToolIcon
+      : activeTool.type === "annotation"
+      ? PenModeIcon
       : activeTool.type === "bucketfill"
       ? bucketFillIcon
       : activeTool.type === "magicframe"
@@ -319,6 +331,28 @@ export const MobileToolbar = ({ app, setAppState }: MobileToolbarProps) => {
           >
             {t("toolBar.laser")}
           </DropdownMenu.Item>
+          {app.props.UIOptions.tools?.annotation !== false && (
+            <DropdownMenu.Item
+              onSelect={() => app.setActiveTool({ type: "annotation" })}
+              icon={PenModeIcon}
+              aria-label={t("toolBar.annotation")}
+              data-testid="toolbar-annotation"
+              selected={annotationToolSelected}
+              disabled={isToolButtonDisabled(app, "annotation")}
+            >
+              {t("toolBar.annotation")}
+            </DropdownMenu.Item>
+          )}
+          {app.hasAnnotations() && (
+            <DropdownMenu.Item
+              onSelect={app.clearAnnotationsForAll}
+              icon={TrashIcon}
+              aria-label={t("toolBar.clearAnnotations")}
+              data-testid="clear-annotations"
+            >
+              {t("toolBar.clearAnnotations")}
+            </DropdownMenu.Item>
+          )}
           <DropdownMenu.Item
             onSelect={() => app.setActiveTool({ type: "bucketfill" })}
             icon={bucketFillIcon}
