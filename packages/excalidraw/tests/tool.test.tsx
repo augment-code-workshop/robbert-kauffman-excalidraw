@@ -125,6 +125,19 @@ describe("findShapeByKey()", () => {
   });
 });
 
+describe("Toolbar", () => {
+  it("renders the eraser immediately after the selection tool", async () => {
+    const { container } = await render(<Excalidraw />);
+    const toolbar = container.querySelector(".App-toolbar")!;
+    const selection = toolbar.querySelector(
+      '[data-testid="toolbar-selection"]',
+    );
+    const eraser = toolbar.querySelector('[data-testid="toolbar-eraser"]');
+
+    expect(selection?.nextElementSibling).toBe(eraser);
+  });
+});
+
 describe("props.activeTool (forced tool)", () => {
   const h = window.h;
   const mouse = new Pointer("mouse");
